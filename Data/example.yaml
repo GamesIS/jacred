@@ -86,6 +86,7 @@ search:
   v1Sort: sid # sid (seeders), pir, size; также IMDB/KP exact v1
   stripTrailingYear: true # Fuzzy: доп. запрос без года в конце
   skipCatFilter: true # Не фильтровать cat/Category[] на сервере (Lampa фильтрует сама)
+  minSeedsPeers: 0 # Скрывать результаты в /api/v2.0/indexers/*/results, где сиды+пиры < N (0 — выкл)
 
 # Torznab XML (Sonarr/Radarr/Prowlarr). Не влияет на Lampa Jackett JSON.
 torznab:

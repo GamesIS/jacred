@@ -108,7 +108,8 @@ namespace JacRed.Configuration.Schema
                         Field("search.maxV1Pairs", "int", "Max v1 pairs", "При mergeV1=auto или true (fuzzy)", min: 1),
                         Field("search.v1Sort", "string", "V1 sort", "sid, pir, size…"),
                         Field("search.stripTrailingYear", "bool", "Strip trailing year", "Fuzzy: запрос без года"),
-                        Field("search.skipCatFilter", "bool", "Skip cat filter", "Не фильтровать cat/Category[] на сервере")
+                        Field("search.skipCatFilter", "bool", "Skip cat filter", "Не фильтровать cat/Category[] на сервере"),
+                        Field("search.minSeedsPeers", "int", "Min seeds+peers", "Скрывать результаты, где сиды+пиры < N (0 — выкл)", min: 0)
                     }),
                     Group("torznab", "Torznab", "Torznab XML (Sonarr/Radarr/Prowlarr)", new[]
                     {
@@ -271,6 +272,9 @@ namespace JacRed.Configuration.Schema
             }
 
             ValidateMergeV1(config.search?.mergeV1, "search.mergeV1", errors);
+
+            if (config.search?.minSeedsPeers < 0)
+                errors.Add("search.minSeedsPeers: не может быть отрицательным");
 
             if (config.logging != null)
             {

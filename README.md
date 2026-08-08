@@ -442,6 +442,7 @@ globalproxy:
 | `v1Sort` | Сортировка v1 (`sid` = seeders; также IMDB/KP) | `sid` |
 | `stripTrailingYear` | Доп. вариант fuzzy-запроса без года | `true` |
 | `skipCatFilter` | Не фильтровать по `cat` / `Category[]` на сервере | `true` |
+| `minSeedsPeers` | Скрывать результаты `/api/v2.0/indexers/.../results`, где сиды + пиры < N (0 — выкл) | `0` |
 
 **`mergeV1: auto`** — v1 fuzzy **только в fuzzy mode** (Torznab text search, Lampa global search). Card mode (Lampa: `title` + `title_original`) — только v2 exact, без v1 fuzzy.
 

@@ -19,5 +19,8 @@ namespace JacRed.Models.AppConf
 
         /// <summary>Skip category post-filter on server (client filters by cat/Category[]).</summary>
         public bool skipCatFilter { get; set; } = true;
+
+        /// <summary>Hide results with seeders + peers below this threshold (0 — disabled).</summary>
+        public int minSeedsPeers { get; set; } = 0;
     }
 }

@@ -69,6 +69,12 @@ namespace JacRed.Infrastructure.Indexers
             }).ToList();
         }
 
+        public static List<Result> FilterBySeedPeer(List<Result> items, int minSeedsPeers)
+        {
+            if (minSeedsPeers <= 0) return items;
+            return items.Where(t => t.Seeders + t.Peers >= minSeedsPeers).ToList();
+        }
+
         public static List<Result> Paginate(List<Result> items, int? limit, int? offset)
         {
             int off = Math.Max(0, offset ?? 0);
