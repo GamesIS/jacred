@@ -19,9 +19,10 @@ namespace JacRed.Controllers.Cron
 
         /// <summary>
         /// Открывает браузером указанный адрес, чтобы сессия была готова к обходу.
-        /// По умолчанию — rutracker forum f=2090 (надёжный CF-триггер).
+        /// По умолчанию — rutracker tracker search (надёжный CF-триггер «Just a moment…»).
         /// </summary>
-        async public Task<IActionResult> Warmup(string url = "https://rutracker.org/forum/viewforum.php?f=2090")
+        /// <param name="url">CF-триггер. По умолчанию tracker search — надёжно ловит «Just a moment…».</param>
+        async public Task<IActionResult> Warmup(string url = "https://rutracker.org/forum/tracker.php?nm=")
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
 

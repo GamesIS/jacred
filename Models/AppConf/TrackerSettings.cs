@@ -13,7 +13,7 @@ namespace JacRed.Models.AppConf
         }
 
 
-        public string host { get; }
+        public string host { get; set; }
 
         public string alias { get; set; }
 
@@ -42,6 +42,12 @@ namespace JacRed.Models.AppConf
         public bool useproxy { get; set; }
 
         public int reqMinute { get; set; }
+
+        /// <summary>
+        /// Сколько раз тянуть topic page за один parsePage, пока не соберутся
+        /// magnet/details (Rutracker под FlareSolverr). 0 или меньше → 1 попытка.
+        /// </summary>
+        public int topicFetchAttempts { get; set; } = 5;
 
         public int parseDelay
         {

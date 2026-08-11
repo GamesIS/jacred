@@ -320,6 +320,9 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                 torrents = torrents.Take(maxTopics).ToList();
 
             int topicsDone = 0;
+            int delayMs = AppInit.conf.Rutracker.parseDelay;
+            int topicAttempts = Math.Max(1, AppInit.conf.Rutracker.topicFetchAttempts);
+
             await FileDB.AddOrUpdate(torrents, async (t, db) =>
             {
                 if (maxTopics > 0 && topicsDone >= maxTopics)
@@ -328,11 +331,24 @@ namespace JacRed.Infrastructure.Trackers.Rutracker
                 if (db.TryGetValue(t.url, out TorrentDetails _tcache) && _tcache.title == t.title)
                     return true;
 
-                var fullNews = await HttpClient.Get(AppInit.conf.Rutracker.rqHost(t.url), useproxy: AppInit.conf.Rutracker.useproxy, cancellationToken: cancellationToken);
-                bool ok = RutrackerParser.ApplyTopicPageDetails(t, fullNews);
-                if (ok)
-                    topicsDone++;
-                return ok;
+                for (int attempt = 1; attempt <= topicAttempts; attempt++)
+                {
+                    if (delayMs > 0)
+                        await Task.Delay(delayMs, cancellationToken);
+
+                    var fullNews = await HttpClient.Get(AppInit.conf.Rutracker.rqHost(t.url), useproxy: AppInit.conf.Rutracker.useproxy, cancellationToken: cancellationToken);
+                    bool ok = RutrackerParser.ApplyTopicPageDetails(t, fullNews);
+                    if (ok)
+                    {
+                        topicsDone++;
+                        return true;
+                    }
+
+                    if (attempt < topicAttempts)
+                        await Task.Delay(delayMs > 0 ? delayMs : 1500, cancellationToken);
+                }
+
+                return false;
             });
 
             return torrents.Count > 0;

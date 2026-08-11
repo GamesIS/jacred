@@ -2,7 +2,7 @@
 
 **Источник истины (код):** `Infrastructure/Security/JacRedEndpointRegistry.cs`  
 **Проверка:** `JacRedAccessCatalog.VerifyRegistry()` — выполняется при старте (несовпадения пишутся в лог)  
-**Последняя проверка:** 2026-07-23 — SPA cutover: shells → `index.html`; статика `/assets/`, PWA `manifest.webmanifest` / Workbox
+**Последняя проверка:** 2026-08-11 — порт 7 трекеров (`anistar`, `leproduction`, `viruseproject`, `anifilm`, `anibelka`, `korsars`, `ultradox`); иконки `/img/ico/{slug}.ico`; OpenAPI 1.2.0 `TrackerSlug`
 **README (оператор):** [Безопасность и доступ](README.md#безопасность-и-доступ-к-api) · [Логирование](README.md#консольное-логирование-logging)
 
 ---
@@ -10,22 +10,22 @@
 ## Определения политик
 
 | Политика | Правило middleware | Ключи |
-|----------|-------------------|-------|
+| ---------- | ------------------- | ------- |
 | **Public** | Всегда разрешено | — |
-| **ConfigApi** | LAN-клиент **или** валидный devkey (одного same-host proxy **недостаточно**) | `X-Dev-Key`, `?devkey=` |
-| **DevAdmin** | LAN-клиент **или** валидный devkey (одного same-host proxy **недостаточно**) | `X-Dev-Key`, `?devkey=` |
+| **ConfigApi** | LAN-клиент **или** валидный devkey (одного reverse proxy **недостаточно**) | `X-Dev-Key`, `?devkey=` |
+| **DevAdmin** | LAN-клиент **или** валидный devkey (одного reverse proxy **недостаточно**) | `X-Dev-Key`, `?devkey=` |
 | **ApiKeyWhenConfigured** | Если `apikey` в конфиге не задан — открыто; иначе нужен валидный ключ | `?apikey=`, `X-Api-Key`, `Bearer` |
 
 **Коды отказа:** OPTIONS → 204; ключ задан, но не передан → 401; иначе → 403.
 
-**Сетевой контекст:** Peer IP — прямое TCP-подключение к Kestrel. Client IP из `CF-Connecting-IP` / `X-Real-IP` / `X-Forwarded-For` учитывается **только** если peer — loopback (same-host proxy); иначе Client IP = peer (см. `ClientNetworkContext`).
+**Сетевой контекст:** Peer IP — прямое TCP-подключение к Kestrel. Client IP из `CF-Connecting-IP` / `X-Real-IP` / `X-Forwarded-For` учитывается **только** если peer — loopback (same-host proxy); иначе Client IP = peer (см. `ClientNetworkContext`). Private peer (loopback или RFC1918, напр. Traefik/nginx/Caddy в Docker) **плюс** proxy identity headers (`X-Forwarded-*`, `X-Real-IP`, `Forwarded`, `CF-*`) **не** считается LAN — нужен `devkey`. Прямой LAN без этих заголовков — без ключа (см. `JacRedAccessEvaluator.IsTrustedLanClient`).
 
 ---
 
 ## Префикс пути → политика (реестр)
 
 | Префикс / шаблон пути | Политика | Примечания |
-|----------------------|----------|------------|
+| ---------------------- | ---------- | ------------ |
 | `/dev/` | DevAdmin | Обслуживание и диагностика |
 | `/cron/` | DevAdmin | Запуск синхронизации трекеров |
 | `/jsondb`, `/jsondb/` | DevAdmin | Администрирование FileDB |
@@ -46,7 +46,7 @@
 ### Public
 
 | Маршрут | Контроллер | Вторичная проверка |
-|---------|------------|-------------------|
+| --------- | ------------ | ------------------- |
 | `GET /` | HomeController | Vue SPA |
 | `GET /stats` | HomeController | SPA route → `index.html` (JSON на `/stats/*` не публичный) |
 | `GET /settings` | HomeController | SPA route → `index.html` |
@@ -64,7 +64,7 @@
 ### ConfigApi
 
 | Маршрут | Контроллер |
-|---------|------------|
+| --------- | ------------ |
 | `GET/POST /api/v1.0/config` | ConfigController |
 | `GET /api/v1.0/config/schema` | ConfigController |
 | `POST /api/v1.0/config/validate` | ConfigController |
@@ -76,17 +76,18 @@
 ### DevAdmin
 
 | Шаблон маршрута | Контроллер |
-|-----------------|------------|
+| ----------------- | ------------ |
 | `/dev/*` | DevMaintenanceController, DevDiagnosticsController, DevMigrationController, DevTracksController |
 | `/jsondb/*` | DbController |
-| `/cron/{tracker}/*` | Controllers/Cron/* (17 трекеров) |
+| `/cron/{tracker}/*` | Controllers/Cron/* (23 трекера) |
 | `/cron/maintenance/Check`, `/Status` | Controllers/Cron/MaintenanceController (FDB integrity) |
 
 ### ApiKeyWhenConfigured
 
 | Маршрут | Контроллер | Вторичная проверка |
-|---------|------------|-------------------|
+| --------- | ------------ | ------------------- |
 | `GET /api/v1.0/torrents` | TorrentsController | — |
+| `GET /api/v1.0/trackers` | TorrentsController | — |
 | `GET /api/v1.0/qualitys` | TorrentsController | — |
 | `GET /api/v2.0/indexers/{status}/results` | JackettController | — |
 | `GET /torznab/api` | TorznabController | — |
@@ -104,8 +105,8 @@
 
 ## Доступ по контексту клиента
 
-| Политика | Loopback / LAN | Same-host proxy (без devkey) | Удалённый / туннель |
-|----------|----------------|------------------------------|---------------------|
+| Политика | Loopback / LAN без proxy headers | Reverse proxy (loopback или Docker + XFF) без devkey | Удалённый / туннель |
+|----------|----------------------------------|------------------------------------------------------|---------------------|
 | Public | ✓ | ✓ | ✓ |
 | ConfigApi | ✓ | ✗ | нужен devkey |
 | DevAdmin | ✓ | ✗ | нужен devkey (если задан в конфиге) |

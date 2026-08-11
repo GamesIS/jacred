@@ -10,13 +10,15 @@ namespace JacRed.Configuration.Schema
         public static readonly HashSet<string> KnownTrackerSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "rutracker", "rutor", "kinozal", "nnmclub", "megapeer", "bitru", "toloka", "mazepa",
-            "lostfilm", "baibako", "torrentby", "selezen", "animelayer", "anidub", "aniliberty", "knaben"
+            "lostfilm", "baibako", "torrentby", "selezen", "animelayer", "anidub", "anistar", "anibelka", "aniliberty", "knaben",
+            "leproduction", "viruseproject", "anifilm", "korsars", "ultradox", "rudub"
         };
 
         public static readonly HashSet<string> TrackerBlockNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "Rutor", "Megapeer", "TorrentBy", "Kinozal", "NNMClub", "Bitru", "Toloka", "Mazepa",
-            "Rutracker", "Selezen", "Lostfilm", "Animelayer", "Anidub", "Aniliberty", "Knaben", "Baibako"
+            "Rutracker", "Selezen", "Lostfilm", "Animelayer", "Anidub", "Anistar", "Anibelka", "Aniliberty", "Knaben", "Baibako",
+            "Leproduction", "Viruseproject", "Anifilm", "Korsars", "Ultradox", "Rudub"
         };
 
         public static readonly HashSet<string> SensitiveFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -130,8 +132,10 @@ namespace JacRed.Configuration.Schema
                     {
                         Field("flaresolverr.enable", "bool", "Включить", "Ходить на CF-хосты через браузер"),
                         Field("flaresolverr.url", "string", "URL", "http://127.0.0.1:8191/v1 или http://flaresolverr:8191/v1"),
-                        Field("flaresolverr.maxTimeoutMs", "int", "Таймаут (мс)", "Первая страница ~80 с", min: 1000),
-                        Field("flaresolverr.sessionIdleMinutes", "int", "Idle сессии (мин)", "Закрыть Chromium после простоя", min: 0),
+                        Field("flaresolverr.maxTimeoutMs", "int", "Таймаут (мс)", "Первая страница / challenge+retry (~5 мин)", min: 1000),
+                        Field("flaresolverr.sessionIdleMinutes", "int", "Idle сессии (мин)", "Закрыть Chromium после простоя (дефолт 120; keep-alive cron чаще)", min: 0),
+                        Field("flaresolverr.browserTimeoutRetries", "int", "Retry на timeout", "Same-session retry до recycle (дефолт 1)", min: 0),
+                        Field("flaresolverr.recycleAfterTimeouts", "int", "Recycle после N timeout", "Destroy сессии после N подряд browser timeout (дефолт 3)", min: 1),
                         Field("flaresolverr.guardedHours", "int", "Guarded hours", "Сколько помнить CF на хосте", min: 1),
                         Field("flaresolverr.recheckMinutes", "int", "Recheck (мин)", "Как часто пробовать обычный GET", min: 1)
                     }),
@@ -153,6 +157,7 @@ namespace JacRed.Configuration.Schema
                     Field("alias", "string", "Alias URL", "Onion/worker URL"),
                     Field("useproxy", "bool", "Use proxy", null),
                     Field("reqMinute", "int", "Запросов/мин", "-1 — отключить", min: -1),
+                    Field("topicFetchAttempts", "int", "Попыток topic GET", "Rutracker: ретраи magnet/details за прогон (дефолт 5)", min: 1),
                     Field("log", "bool", "Лог парсера", "Data/log/{tracker}.log, default: true"),
                     Field("cookie", "password", "Cookie", "Статический cookie", sensitive: true),
                     Field("login.u", "password", "Login", null, sensitive: true),

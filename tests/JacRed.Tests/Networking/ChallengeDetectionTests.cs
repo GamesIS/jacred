@@ -62,8 +62,20 @@ public class ChallengeDetectionTests
     [InlineData("504 Gateway Time-out")]
     [InlineData("")]
     [InlineData(null)]
+    // Обычная выдача rutracker: Cloudflare jsd, не interstitial.
+    [InlineData("a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';")]
     public void Обычная_страница_отказа_проверкой_не_считается(string body)
     {
+        Assert.False(CloudflareClearance.IsChallengeBody(body));
+    }
+
+    [Fact]
+    public void Реальная_выдача_с_jsd_не_проверка()
+    {
+        // Фрагмент с живой страницы viewforum (FlareSolverr 200 + torTopic).
+        string body = "<title>Фильмы до 1990 года</title>"
+            + "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';"
+            + "class=\"torTopic\" id=\"tt-123\"";
         Assert.False(CloudflareClearance.IsChallengeBody(body));
     }
 

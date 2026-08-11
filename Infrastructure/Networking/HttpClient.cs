@@ -188,60 +188,59 @@ namespace JacRed.Infrastructure.Networking
                         using (HttpResponseMessage response = await client.SendAsync(req, cancellationToken))
                         {
                             if (response.StatusCode == HttpStatusCode.OK)
-                                CloudflareClearance.Unguard(requestHost);
-
-                            if (response.StatusCode != HttpStatusCode.OK)
                             {
-                                // cf-mitigated или разметка «Just a moment…» → браузер.
-                                // Таймаут браузера свой; token вызывающего сюда не идёт.
-                                bool challenge = CloudflareClearance.IsChallenge(response);
+                                string okBody;
+                                if (encoding != default)
+                                    okBody = encoding.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken));
+                                else
+                                    okBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
-                                if (!challenge
-                                    && (response.StatusCode == HttpStatusCode.Forbidden
-                                        || response.StatusCode == HttpStatusCode.ServiceUnavailable))
-                                {
-                                    try
-                                    {
-                                        challenge = CloudflareClearance.IsChallengeBody(
-                                            await response.Content.ReadAsStringAsync(cancellationToken));
-                                    }
-                                    catch
-                                    {
-                                        // Тело не прочиталось — не помечаем хост guarded.
-                                    }
-                                }
+                                if (string.IsNullOrWhiteSpace(okBody))
+                                    continue;
 
-                                if (challenge)
+                                // Иногда CF отдаёт interstitial с кодом 200 («Just a moment…»).
+                                if (CloudflareClearance.IsChallengeBody(okBody))
                                 {
                                     CloudflareClearance.MarkGuarded(requestHost);
-
                                     string viaBrowser = await CloudflareClearance.FetchAsync(url, cookie);
                                     if (!string.IsNullOrWhiteSpace(viaBrowser))
                                         return (viaBrowser, OkResponse(url));
+                                    continue;
                                 }
 
-                                continue;
+                                CloudflareClearance.Unguard(requestHost);
+                                return (okBody, response);
                             }
 
-                            using (HttpContent content = response.Content)
+                            // cf-mitigated или разметка «Just a moment…» → браузер.
+                            // Таймаут браузера свой; token вызывающего сюда не идёт.
+                            bool challenge = CloudflareClearance.IsChallenge(response);
+
+                            if (!challenge
+                                && (response.StatusCode == HttpStatusCode.Forbidden
+                                    || response.StatusCode == HttpStatusCode.ServiceUnavailable))
                             {
-                                if (encoding != default)
+                                try
                                 {
-                                    string res = encoding.GetString(await content.ReadAsByteArrayAsync(cancellationToken));
-                                    if (string.IsNullOrWhiteSpace(res))
-                                        continue;
-
-                                    return (res, response);
+                                    challenge = CloudflareClearance.IsChallengeBody(
+                                        await response.Content.ReadAsStringAsync(cancellationToken));
                                 }
-                                else
+                                catch
                                 {
-                                    string res = await content.ReadAsStringAsync(cancellationToken);
-                                    if (string.IsNullOrWhiteSpace(res))
-                                        continue;
-
-                                    return (res, response);
+                                    // Тело не прочиталось — не помечаем хост guarded.
                                 }
                             }
+
+                            if (challenge)
+                            {
+                                CloudflareClearance.MarkGuarded(requestHost);
+
+                                string viaBrowser = await CloudflareClearance.FetchAsync(url, cookie);
+                                if (!string.IsNullOrWhiteSpace(viaBrowser))
+                                    return (viaBrowser, OkResponse(url));
+                            }
+
+                            continue;
                         }
                     }
                 }

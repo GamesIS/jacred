@@ -21,6 +21,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/background-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * In-process background ParseAll / UpdateTasks jobs
+         * @description Local ops status for active tracker sync jobs started via `/cron/{slug}/…`.
+         *     Public (no apikey). Empty `jobs` array when nothing is running.
+         */
+        get: operations["healthBackgroundJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/version": {
         parameters: {
             query?: never;
@@ -82,7 +103,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Jackett-compatible search */
+        /**
+         * Jackett-compatible search
+         * @description Lampa and other Jackett JSON clients. Path `{status}` is normally `all` (aggregate).
+         *     When `{status}` is a tracker id from `GET /api/v1.0/trackers` (for example `rutracker`),
+         *     results are filtered to that tracker (case-insensitive; matches any part of a merged trackerName).
+         */
         get: operations["jackettSearch"];
         put?: never;
         post?: never;
@@ -101,6 +127,28 @@ export interface paths {
         };
         /** Native torrent search */
         get: operations["torrentsSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1.0/trackers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List available tracker names
+         * @description Returns tracker ids for discovery and filters.
+         *     Source: `synctrackers` when set (including empty `[]` → empty list); otherwise known built-in slugs.
+         *     Entries in `disable_trackers` are excluded. Sorted case-insensitively.
+         */
+        get: operations["trackerNames"];
         put?: never;
         post?: never;
         delete?: never;
@@ -135,14 +183,23 @@ export interface paths {
         };
         /**
          * Torznab API (caps, search)
-         * @description Native Torznab XML when torznab.enable is true.
+         * @description Native Torznab XML when `torznab.enable` is true.
+         *     Caps advertise `q`, `imdbid`[, `tvdbid`, `season`, `ep`]. JacRed also accepts card fields
+         *     (`title`, `title_original`, `year`, `is_serial`, `genres`), pagination (`limit`/`offset`),
+         *     category aliases (`cat`/`Category`/`categories`/`Category[]`), and tracker filters
+         *     (`Tracker`/`Tracker[]`/`tracker`).
+         *     `t=indexers` returns aggregate `all` plus one indexer entry per `GET /api/v1.0/trackers` name.
          */
         get: operations["torznabRoot"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Torznab HEAD probe
+         * @description Returns empty Torznab XML body (same content-type as GET).
+         */
+        head: operations["torznabRootHead"];
         patch?: never;
         trace?: never;
     };
@@ -153,13 +210,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Torznab API (indexer path) */
+        /**
+         * Torznab API (indexer path)
+         * @description Jackett-compatible Torznab alias. Path `{indexer}` is normally `all`.
+         *     When `{indexer}` is a tracker id (not `all`), search results are filtered to that tracker.
+         *     `t=indexers` lists `all` plus per-tracker indexers from the tracker catalog.
+         *     Same query params as `/torznab/api` (caps + JacRed card fields, categories, tracker filters).
+         */
         get: operations["torznabIndexer"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Torznab HEAD probe (indexer path)
+         * @description Returns empty Torznab XML body (same content-type as GET).
+         */
+        head: operations["torznabIndexerHead"];
         patch?: never;
         trace?: never;
     };
@@ -170,7 +237,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List configured indexers (Jackett/Prowlarr) */
+        /**
+         * List configured indexers (Jackett)
+         * @description Jackett-style indexer discovery. Always includes aggregate `id=all`, then one entry per
+         *     `GET /api/v1.0/trackers` name (same set as Torznab `t=indexers`).
+         *     Prowlarr clients should use `/api/v1/indexer` (single aggregate `id=1`).
+         */
         get: operations["indexersList"];
         put?: never;
         post?: never;
@@ -233,13 +305,18 @@ export interface paths {
          * Prowlarr Torznab proxy
          * @description Prowlarr-compatible Torznab endpoint (`t=caps`, `search`, `tvsearch`, `moviesearch`).
          *     Same handler as `/torznab/api` and Jackett alias paths.
+         *     Path `{indexer}` is typically numeric (`1` = aggregate JacRed); numeric ids do not apply a tracker filter.
          */
         get: operations["prowlarrNewznab"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Prowlarr Torznab HEAD probe
+         * @description Returns empty Torznab XML body (same content-type as GET).
+         */
+        head: operations["prowlarrNewznabHead"];
         patch?: never;
         trace?: never;
     };
@@ -362,6 +439,7 @@ export interface paths {
         /**
          * Sync FileDB key listing
          * @description Requires `opensync: true` in server config.
+         *     When `opensync` is false, returns **200** with body `[]`.
          */
         get: operations["syncFdb"];
         put?: never;
@@ -381,7 +459,9 @@ export interface paths {
         };
         /**
          * Sync FileDB torrent collections
-         * @description Returns torrent batches changed after `time`. Supports spidr mode and incremental `start`. Requires `opensync: true`.
+         * @description Returns torrent batches changed after `time`. Supports spidr mode and incremental `start`.
+         *     Requires `opensync: true`. When `opensync` is false or `time` is `0`, returns
+         *     `{ nextread: false, collections: [] }` (countread/take may be omitted).
          */
         get: operations["syncFdbTorrents"];
         put?: never;
@@ -446,7 +526,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Form schema for settings UI */
+        /**
+         * Form schema for settings UI
+         * @description **LAN or valid X-Dev-Key** (same-host proxy alone is not sufficient).
+         */
         get: operations["configSchema"];
         put?: never;
         post?: never;
@@ -465,7 +548,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Validate configuration without saving */
+        /**
+         * Validate configuration without saving
+         * @description **LAN or valid X-Dev-Key.**
+         */
         post: operations["configValidate"];
         delete?: never;
         options?: never;
@@ -484,7 +570,7 @@ export interface paths {
         put?: never;
         /**
          * Diff proposed config vs current
-         * @description Used by settings UI before save confirmation.
+         * @description Used by settings UI before save confirmation. **LAN or valid X-Dev-Key.**
          */
         post: operations["configDiff"];
         delete?: never;
@@ -504,7 +590,7 @@ export interface paths {
         put?: never;
         /**
          * Serialize form data to YAML/JSON
-         * @description Form ↔ raw editor sync (settings UI).
+         * @description Form ↔ raw editor sync (settings UI). **LAN or valid X-Dev-Key.**
          */
         post: operations["configRender"];
         delete?: never;
@@ -522,7 +608,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Parse YAML/JSON text to JSON object */
+        /**
+         * Parse YAML/JSON text to JSON object
+         * @description **LAN or valid X-Dev-Key.**
+         */
         post: operations["configParse"];
         delete?: never;
         options?: never;
@@ -541,7 +630,7 @@ export interface paths {
         put?: never;
         /**
          * Pretty-print config after AppInit normalization
-         * @description Validates, normalizes through AppInit model, returns formatted YAML/JSON.
+         * @description Validates, normalizes through AppInit model, returns formatted YAML/JSON. **LAN or valid X-Dev-Key.**
          */
         post: operations["configFormat"];
         delete?: never;
@@ -642,9 +731,36 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Internal tracker id (FileDB / cron / synctrackers)
+         * @example korsars
+         * @enum {string}
+         */
+        TrackerSlug: "anibelka" | "anidub" | "anifilm" | "aniliberty" | "animelayer" | "anistar" | "baibako" | "bitru" | "kinozal" | "knaben" | "korsars" | "leproduction" | "lostfilm" | "mazepa" | "megapeer" | "nnmclub" | "rudub" | "rutor" | "rutracker" | "selezen" | "toloka" | "torrentby" | "ultradox" | "viruseproject";
         HealthResponse: {
             /** @example OK */
             status?: string;
+        };
+        BackgroundJobsResponse: {
+            jobs: components["schemas"]["BackgroundJob"][];
+        };
+        /**
+         * @description JSON uses ASP.NET default naming (`PropertyNamingPolicy = null`):
+         *     PascalCase for Key/Tracker/JobLabel/ProgressDetail and camelCase for the remaining fields.
+         */
+        BackgroundJob: {
+            /** @description Internal job key */
+            Key?: string;
+            Tracker?: components["schemas"]["TrackerSlug"];
+            /** @description Human-readable job label (e.g. ParseAll, UpdateTasks) */
+            JobLabel?: string;
+            /** Format: date-time */
+            startedAtUtc?: string;
+            /** @description Seconds since startedAtUtc */
+            ageSec?: number;
+            progressCurrent?: number | null;
+            progressTotal?: number | null;
+            ProgressDetail?: string | null;
         };
         VersionResponse: {
             version?: string;
@@ -668,6 +784,28 @@ export interface components {
              * @enum {string}
              */
             protocol?: "unknown" | "usenet" | "torrent";
+        };
+        /**
+         * @description Jackett-style indexer discovery item from `GET /api/v2.0/indexers`.
+         *     `id=all` is the aggregate; other ids are tracker slugs from the tracker catalog.
+         */
+        JackettIndexer: {
+            /**
+             * @description 'all' or a tracker id (e.g. rutracker)
+             * @example all
+             */
+            id: string;
+            /** @example JacRed (all trackers) */
+            name: string;
+            description?: string;
+            /** @example public */
+            type?: string;
+            configured: boolean;
+            /**
+             * Format: uri
+             * @example https://github.com/jacred-fdb/jacred
+             */
+            link?: string;
         };
         /** @description Prowlarr /api/v1/indexer/{id} detail response */
         ProwlarrIndexerDetail: {
@@ -883,6 +1021,10 @@ export interface components {
             updateTime?: string;
         };
         TorrentListItem: {
+            /**
+             * @description Tracker id, or a merged comma-separated trackerName (e.g. `kinozal,rutracker`).
+             *     Known single slugs are listed under `TrackerSlug`.
+             */
             tracker?: string;
             title?: string;
             /** Format: int64 */
@@ -909,6 +1051,10 @@ export interface components {
             skip?: number;
         };
         TrackerStat: {
+            /**
+             * @description Tracker id or merged trackerName from stats.json.
+             *     Known single slugs are listed under `TrackerSlug`.
+             */
             trackerName: string;
             lastnewtor?: string | null;
             newtor?: number | null;
@@ -925,9 +1071,57 @@ export interface components {
             /** Format: date-time */
             tracksStatsUpdatedAt?: string | null;
         };
+        /** @description One FileDB master key match from `GET /sync/fdb` */
+        SyncFdbKeyItem: {
+            /** @description FileDB bucket key */
+            Key?: string;
+            /** Format: date-time */
+            updateTime?: string;
+            /** Format: int64 */
+            fileTime?: number;
+            /** @description Relative path under Data/fdb */
+            path?: string;
+            /** @description Opened FileDB payload for the key */
+            value?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @description Incremental torrent sync batch from `GET /sync/fdb/torrents`.
+         *     Soft-empty when `opensync` is false or `time` is `0`: `{ nextread: false, collections: [] }`.
+         */
+        SyncFdbTorrentsResponse: {
+            /** @description True when more batches remain after this response */
+            nextread: boolean;
+            /** @description Number of torrents included in this batch */
+            countread?: number;
+            /**
+             * @description Soft batch size threshold (default 2000)
+             * @example 2000
+             */
+            take?: number;
+            collections: components["schemas"]["SyncFdbCollection"][];
+        };
+        SyncFdbCollection: {
+            /** @description FileDB bucket key */
+            Key: string;
+            Value: components["schemas"]["SyncFdbCollectionValue"];
+        };
+        SyncFdbCollectionValue: {
+            /** Format: date-time */
+            time?: string;
+            /** Format: int64 */
+            fileTime?: number;
+            /** @description Map of torrent id → torrent details (full or spidr-slim) */
+            torrents?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
     };
     responses: {
-        /** @description Missing or invalid API key */
+        /** @description Missing or invalid API key (when apikey is configured) */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -936,10 +1130,97 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Invalid or missing devkey */
+        ConfigUnauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
+        /** @description Forbidden (LAN trusted client or valid X-Dev-Key / ?devkey= required) */
+        ConfigForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
     };
     parameters: {
         /** @description API key (alternative — X-Api-Key header or Bearer) */
         ApiKeyQuery: string;
+        /** @description Torznab function (`caps`, `indexers`, or search type) */
+        TorznabT: "caps" | "indexers" | "search" | "tvsearch" | "movie" | "tv" | "moviesearch";
+        /** @description Free-text search query */
+        TorznabQ: string;
+        /** @description Comma-separated Torznab category ids */
+        TorznabCat: string;
+        /** @description IMDb id (`tt…` or bare digits); aliases `imdb_id`, `imdbId` also accepted */
+        TorznabImdbId: string;
+        /** @description TheTVDB id (tv-search) */
+        TorznabTvdbId: string;
+        /** @description Alias for `tvdbid` */
+        TorznabRid: string;
+        /** @description Season number (tv-search filter) */
+        TorznabSeason: number;
+        /** @description Episode number (tv-search filter) */
+        TorznabEp: number;
+        /** @description Alias for `ep` */
+        TorznabEpisode: number;
+        /** @description Localized title (JacRed / Lampa card search) */
+        TorznabTitle: string;
+        /** @description Original title (JacRed / Lampa card search) */
+        TorznabTitleOriginal: string;
+        /** @description Max results after filters */
+        TorznabLimit: number;
+        /** @description Result offset for pagination */
+        TorznabOffset: number;
+        /**
+         * @description Used with `t=indexers`. Omit, empty, or `true` returns the JacRed indexer list XML;
+         *     `false` returns an empty `<indexers>` document.
+         * @example true
+         */
+        TorznabConfigured: string;
+        /** @description Free-text search alias for `query` / Torznab `q` */
+        SearchQ: string;
+        /** @description Alternate capitalization of free-text search query */
+        SearchQueryAlt: string;
+        /** @description Alias for `imdbid` */
+        ImdbIdAltUnderscore: string;
+        /** @description Alias for `imdbid` */
+        ImdbIdAltCamel: string;
+        /**
+         * @description Torznab/Jackett category ids (repeat or comma-separated).
+         *     Also accepted as `cat`, `Category`, `Category[]`, `Category[n]`.
+         */
+        Categories: number[];
+        /** @description Single or comma-separated category ids (alias for `categories` / `cat`) */
+        Category: string;
+        /** @description Jackett/Lampa category array (e.g. 2000 movies, 5000 TV, 5070 anime) */
+        CategoryBracket: number[];
+        /**
+         * @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker).
+         *     Case-insensitive; matches any comma-separated part of stored trackerName.
+         */
+        TrackerArray: components["schemas"]["TrackerSlug"][];
+        /**
+         * @description Optional tracker filter (comma-separated `TrackerSlug` values); same semantics as `Tracker[]`.
+         *     Also accepted as `tracker` / `Tracker[n]`.
+         */
+        TrackerFilter: string;
+        /**
+         * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+         *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+         */
+        TrackerAlias: string;
+        /**
+         * @description When non-empty, enables JacRed card-metadata search mode (same trigger as title/title_original).
+         *     Not used as a genre filter on results.
+         */
+        Genres: string;
+        /** @description Release year filter / card-search override */
+        Year: number;
+        /** @description -1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime */
+        IsSerial: number;
     };
     requestBodies: never;
     headers: never;
@@ -963,6 +1244,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    healthBackgroundJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active background jobs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackgroundJobsResponse"];
                 };
             };
         };
@@ -1042,19 +1343,69 @@ export interface operations {
                 /** @description API key (alternative — X-Api-Key header or Bearer) */
                 apikey?: components["parameters"]["ApiKeyQuery"];
                 query?: string;
-                title?: string;
-                title_original?: string;
-                year?: number;
-                is_serial?: number;
-                /** @description Jackett/Lampa categories (e.g. 2000 movies, 5000 TV, 5070 anime) */
-                "Category[]"?: string[];
-                /** @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker) */
-                "Tracker[]"?: string[];
-                /** @description Single-tracker alias for Tracker[] */
-                tracker?: string;
+                /** @description Free-text search alias for `query` / Torznab `q` */
+                q?: components["parameters"]["SearchQ"];
+                /** @description Alternate capitalization of free-text search query */
+                Query?: components["parameters"]["SearchQueryAlt"];
+                /** @description Localized title (JacRed / Lampa card search) */
+                title?: components["parameters"]["TorznabTitle"];
+                /** @description Original title (JacRed / Lampa card search) */
+                title_original?: components["parameters"]["TorznabTitleOriginal"];
+                /** @description Release year filter / card-search override */
+                year?: components["parameters"]["Year"];
+                /** @description -1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime */
+                is_serial?: components["parameters"]["IsSerial"];
+                /** @description Jackett/Lampa category array (e.g. 2000 movies, 5000 TV, 5070 anime) */
+                "Category[]"?: components["parameters"]["CategoryBracket"];
+                /** @description Single or comma-separated category ids (alias for `categories` / `cat`) */
+                Category?: components["parameters"]["Category"];
+                /** @description Comma-separated Torznab category ids */
+                cat?: components["parameters"]["TorznabCat"];
+                /**
+                 * @description Torznab/Jackett category ids (repeat or comma-separated).
+                 *     Also accepted as `cat`, `Category`, `Category[]`, `Category[n]`.
+                 */
+                categories?: components["parameters"]["Categories"];
+                /**
+                 * @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker).
+                 *     Case-insensitive; matches any comma-separated part of stored trackerName.
+                 */
+                "Tracker[]"?: components["parameters"]["TrackerArray"];
+                /**
+                 * @description Optional tracker filter (comma-separated `TrackerSlug` values); same semantics as `Tracker[]`.
+                 *     Also accepted as `tracker` / `Tracker[n]`.
+                 */
+                Tracker?: components["parameters"]["TrackerFilter"];
+                /**
+                 * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+                 *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+                 */
+                tracker?: components["parameters"]["TrackerAlias"];
+                /** @description IMDb id (`tt…` or bare digits); aliases `imdb_id`, `imdbId` also accepted */
+                imdbid?: components["parameters"]["TorznabImdbId"];
+                /** @description Alias for `imdbid` */
+                imdb_id?: components["parameters"]["ImdbIdAltUnderscore"];
+                /** @description Alias for `imdbid` */
+                imdbId?: components["parameters"]["ImdbIdAltCamel"];
+                /** @description Season number (tv-search filter) */
+                season?: components["parameters"]["TorznabSeason"];
+                /** @description Episode number (tv-search filter) */
+                ep?: components["parameters"]["TorznabEp"];
+                /** @description Alias for `ep` */
+                episode?: components["parameters"]["TorznabEpisode"];
+                /** @description Max results after filters */
+                limit?: components["parameters"]["TorznabLimit"];
+                /** @description Result offset for pagination */
+                offset?: components["parameters"]["TorznabOffset"];
+                /**
+                 * @description When non-empty, enables JacRed card-metadata search mode (same trigger as title/title_original).
+                 *     Not used as a genre filter on results.
+                 */
+                genres?: components["parameters"]["Genres"];
             };
             header?: never;
             path: {
+                /** @description `all` for aggregate search, or a tracker id (e.g. `kinozal`, `rutracker`) to scope results. */
                 status: string;
             };
             cookie?: never;
@@ -1084,7 +1435,11 @@ export interface operations {
                 exact?: boolean;
                 type?: string;
                 sort?: "sid" | "pir" | "size" | "create" | "update";
-                tracker?: string;
+                /**
+                 * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+                 *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+                 */
+                tracker?: components["parameters"]["TrackerAlias"];
                 voice?: string;
                 videotype?: string;
                 relased?: number;
@@ -1104,6 +1459,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TorrentListItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    trackerNames: {
+        parameters: {
+            query?: {
+                /** @description API key (alternative — X-Api-Key header or Bearer) */
+                apikey?: components["parameters"]["ApiKeyQuery"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available tracker names (e.g. rutracker, kinozal, korsars) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerSlug"][];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -1150,9 +1529,77 @@ export interface operations {
             query?: {
                 /** @description API key (alternative — X-Api-Key header or Bearer) */
                 apikey?: components["parameters"]["ApiKeyQuery"];
-                t?: "caps" | "indexers" | "search" | "tvsearch" | "movie" | "tv" | "moviesearch";
-                q?: string;
-                cat?: string;
+                /** @description Torznab function (`caps`, `indexers`, or search type) */
+                t?: components["parameters"]["TorznabT"];
+                /** @description Free-text search query */
+                q?: components["parameters"]["TorznabQ"];
+                /** @description Alternate capitalization of free-text search query */
+                Query?: components["parameters"]["SearchQueryAlt"];
+                /** @description Comma-separated Torznab category ids */
+                cat?: components["parameters"]["TorznabCat"];
+                /** @description Single or comma-separated category ids (alias for `categories` / `cat`) */
+                Category?: components["parameters"]["Category"];
+                /** @description Jackett/Lampa category array (e.g. 2000 movies, 5000 TV, 5070 anime) */
+                "Category[]"?: components["parameters"]["CategoryBracket"];
+                /**
+                 * @description Torznab/Jackett category ids (repeat or comma-separated).
+                 *     Also accepted as `cat`, `Category`, `Category[]`, `Category[n]`.
+                 */
+                categories?: components["parameters"]["Categories"];
+                /** @description IMDb id (`tt…` or bare digits); aliases `imdb_id`, `imdbId` also accepted */
+                imdbid?: components["parameters"]["TorznabImdbId"];
+                /** @description Alias for `imdbid` */
+                imdb_id?: components["parameters"]["ImdbIdAltUnderscore"];
+                /** @description Alias for `imdbid` */
+                imdbId?: components["parameters"]["ImdbIdAltCamel"];
+                /** @description TheTVDB id (tv-search) */
+                tvdbid?: components["parameters"]["TorznabTvdbId"];
+                /** @description Alias for `tvdbid` */
+                rid?: components["parameters"]["TorznabRid"];
+                /** @description Season number (tv-search filter) */
+                season?: components["parameters"]["TorznabSeason"];
+                /** @description Episode number (tv-search filter) */
+                ep?: components["parameters"]["TorznabEp"];
+                /** @description Alias for `ep` */
+                episode?: components["parameters"]["TorznabEpisode"];
+                /** @description Localized title (JacRed / Lampa card search) */
+                title?: components["parameters"]["TorznabTitle"];
+                /** @description Original title (JacRed / Lampa card search) */
+                title_original?: components["parameters"]["TorznabTitleOriginal"];
+                /** @description Release year filter / card-search override */
+                year?: components["parameters"]["Year"];
+                /** @description -1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime */
+                is_serial?: components["parameters"]["IsSerial"];
+                /**
+                 * @description When non-empty, enables JacRed card-metadata search mode (same trigger as title/title_original).
+                 *     Not used as a genre filter on results.
+                 */
+                genres?: components["parameters"]["Genres"];
+                /** @description Max results after filters */
+                limit?: components["parameters"]["TorznabLimit"];
+                /** @description Result offset for pagination */
+                offset?: components["parameters"]["TorznabOffset"];
+                /**
+                 * @description Used with `t=indexers`. Omit, empty, or `true` returns the JacRed indexer list XML;
+                 *     `false` returns an empty `<indexers>` document.
+                 * @example true
+                 */
+                configured?: components["parameters"]["TorznabConfigured"];
+                /**
+                 * @description Optional tracker filter (comma-separated `TrackerSlug` values); same semantics as `Tracker[]`.
+                 *     Also accepted as `tracker` / `Tracker[n]`.
+                 */
+                Tracker?: components["parameters"]["TrackerFilter"];
+                /**
+                 * @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker).
+                 *     Case-insensitive; matches any comma-separated part of stored trackerName.
+                 */
+                "Tracker[]"?: components["parameters"]["TrackerArray"];
+                /**
+                 * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+                 *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+                 */
+                tracker?: components["parameters"]["TrackerAlias"];
             };
             header?: never;
             path?: never;
@@ -1169,6 +1616,38 @@ export interface operations {
                     "application/xml": string;
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            /** @description Torznab disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    torznabRootHead: {
+        parameters: {
+            query?: {
+                /** @description API key (alternative — X-Api-Key header or Bearer) */
+                apikey?: components["parameters"]["ApiKeyQuery"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty XML OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             /** @description Torznab disabled */
             404: {
                 headers: {
@@ -1183,10 +1662,81 @@ export interface operations {
             query?: {
                 /** @description API key (alternative — X-Api-Key header or Bearer) */
                 apikey?: components["parameters"]["ApiKeyQuery"];
-                t?: string;
+                /** @description Torznab function (`caps`, `indexers`, or search type) */
+                t?: components["parameters"]["TorznabT"];
+                /** @description Free-text search query */
+                q?: components["parameters"]["TorznabQ"];
+                /** @description Alternate capitalization of free-text search query */
+                Query?: components["parameters"]["SearchQueryAlt"];
+                /** @description Comma-separated Torznab category ids */
+                cat?: components["parameters"]["TorznabCat"];
+                /** @description Single or comma-separated category ids (alias for `categories` / `cat`) */
+                Category?: components["parameters"]["Category"];
+                /** @description Jackett/Lampa category array (e.g. 2000 movies, 5000 TV, 5070 anime) */
+                "Category[]"?: components["parameters"]["CategoryBracket"];
+                /**
+                 * @description Torznab/Jackett category ids (repeat or comma-separated).
+                 *     Also accepted as `cat`, `Category`, `Category[]`, `Category[n]`.
+                 */
+                categories?: components["parameters"]["Categories"];
+                /** @description IMDb id (`tt…` or bare digits); aliases `imdb_id`, `imdbId` also accepted */
+                imdbid?: components["parameters"]["TorznabImdbId"];
+                /** @description Alias for `imdbid` */
+                imdb_id?: components["parameters"]["ImdbIdAltUnderscore"];
+                /** @description Alias for `imdbid` */
+                imdbId?: components["parameters"]["ImdbIdAltCamel"];
+                /** @description TheTVDB id (tv-search) */
+                tvdbid?: components["parameters"]["TorznabTvdbId"];
+                /** @description Alias for `tvdbid` */
+                rid?: components["parameters"]["TorznabRid"];
+                /** @description Season number (tv-search filter) */
+                season?: components["parameters"]["TorznabSeason"];
+                /** @description Episode number (tv-search filter) */
+                ep?: components["parameters"]["TorznabEp"];
+                /** @description Alias for `ep` */
+                episode?: components["parameters"]["TorznabEpisode"];
+                /** @description Localized title (JacRed / Lampa card search) */
+                title?: components["parameters"]["TorznabTitle"];
+                /** @description Original title (JacRed / Lampa card search) */
+                title_original?: components["parameters"]["TorznabTitleOriginal"];
+                /** @description Release year filter / card-search override */
+                year?: components["parameters"]["Year"];
+                /** @description -1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime */
+                is_serial?: components["parameters"]["IsSerial"];
+                /**
+                 * @description When non-empty, enables JacRed card-metadata search mode (same trigger as title/title_original).
+                 *     Not used as a genre filter on results.
+                 */
+                genres?: components["parameters"]["Genres"];
+                /** @description Max results after filters */
+                limit?: components["parameters"]["TorznabLimit"];
+                /** @description Result offset for pagination */
+                offset?: components["parameters"]["TorznabOffset"];
+                /**
+                 * @description Used with `t=indexers`. Omit, empty, or `true` returns the JacRed indexer list XML;
+                 *     `false` returns an empty `<indexers>` document.
+                 * @example true
+                 */
+                configured?: components["parameters"]["TorznabConfigured"];
+                /**
+                 * @description Optional tracker filter (comma-separated `TrackerSlug` values); same semantics as `Tracker[]`.
+                 *     Also accepted as `tracker` / `Tracker[n]`.
+                 */
+                Tracker?: components["parameters"]["TrackerFilter"];
+                /**
+                 * @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker).
+                 *     Case-insensitive; matches any comma-separated part of stored trackerName.
+                 */
+                "Tracker[]"?: components["parameters"]["TrackerArray"];
+                /**
+                 * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+                 *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+                 */
+                tracker?: components["parameters"]["TrackerAlias"];
             };
             header?: never;
             path: {
+                /** @description `all` for aggregate search, or a tracker id (e.g. `rutracker`) to scope results. */
                 indexer: string;
             };
             cookie?: never;
@@ -1202,6 +1752,47 @@ export interface operations {
                     "application/xml": string;
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            /** @description Torznab disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    torznabIndexerHead: {
+        parameters: {
+            query?: {
+                /** @description API key (alternative — X-Api-Key header or Bearer) */
+                apikey?: components["parameters"]["ApiKeyQuery"];
+            };
+            header?: never;
+            path: {
+                indexer: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty XML OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Torznab disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     indexersList: {
@@ -1216,13 +1807,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Indexer list */
+            /** @description Indexer list (`all` + per-tracker) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": components["schemas"]["JackettIndexer"][];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -1251,6 +1842,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProwlarrIndexer"][];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             /** @description Torznab disabled */
             404: {
                 headers: {
@@ -1283,6 +1875,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProwlarrIndexerDetail"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             /** @description Torznab disabled or unknown indexer id */
             404: {
                 headers: {
@@ -1297,12 +1890,81 @@ export interface operations {
             query?: {
                 /** @description API key (alternative — X-Api-Key header or Bearer) */
                 apikey?: components["parameters"]["ApiKeyQuery"];
-                t?: "caps" | "indexers" | "search" | "tvsearch" | "movie" | "tv" | "moviesearch";
-                q?: string;
-                cat?: string;
+                /** @description Torznab function (`caps`, `indexers`, or search type) */
+                t?: components["parameters"]["TorznabT"];
+                /** @description Free-text search query */
+                q?: components["parameters"]["TorznabQ"];
+                /** @description Alternate capitalization of free-text search query */
+                Query?: components["parameters"]["SearchQueryAlt"];
+                /** @description Comma-separated Torznab category ids */
+                cat?: components["parameters"]["TorznabCat"];
+                /** @description Single or comma-separated category ids (alias for `categories` / `cat`) */
+                Category?: components["parameters"]["Category"];
+                /** @description Jackett/Lampa category array (e.g. 2000 movies, 5000 TV, 5070 anime) */
+                "Category[]"?: components["parameters"]["CategoryBracket"];
+                /**
+                 * @description Torznab/Jackett category ids (repeat or comma-separated).
+                 *     Also accepted as `cat`, `Category`, `Category[]`, `Category[n]`.
+                 */
+                categories?: components["parameters"]["Categories"];
+                /** @description IMDb id (`tt…` or bare digits); aliases `imdb_id`, `imdbId` also accepted */
+                imdbid?: components["parameters"]["TorznabImdbId"];
+                /** @description Alias for `imdbid` */
+                imdb_id?: components["parameters"]["ImdbIdAltUnderscore"];
+                /** @description Alias for `imdbid` */
+                imdbId?: components["parameters"]["ImdbIdAltCamel"];
+                /** @description TheTVDB id (tv-search) */
+                tvdbid?: components["parameters"]["TorznabTvdbId"];
+                /** @description Alias for `tvdbid` */
+                rid?: components["parameters"]["TorznabRid"];
+                /** @description Season number (tv-search filter) */
+                season?: components["parameters"]["TorznabSeason"];
+                /** @description Episode number (tv-search filter) */
+                ep?: components["parameters"]["TorznabEp"];
+                /** @description Alias for `ep` */
+                episode?: components["parameters"]["TorznabEpisode"];
+                /** @description Localized title (JacRed / Lampa card search) */
+                title?: components["parameters"]["TorznabTitle"];
+                /** @description Original title (JacRed / Lampa card search) */
+                title_original?: components["parameters"]["TorznabTitleOriginal"];
+                /** @description Release year filter / card-search override */
+                year?: components["parameters"]["Year"];
+                /** @description -1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime */
+                is_serial?: components["parameters"]["IsSerial"];
+                /**
+                 * @description When non-empty, enables JacRed card-metadata search mode (same trigger as title/title_original).
+                 *     Not used as a genre filter on results.
+                 */
+                genres?: components["parameters"]["Genres"];
+                /** @description Max results after filters */
+                limit?: components["parameters"]["TorznabLimit"];
+                /** @description Result offset for pagination */
+                offset?: components["parameters"]["TorznabOffset"];
+                /**
+                 * @description Used with `t=indexers`. Omit, empty, or `true` returns the JacRed indexer list XML;
+                 *     `false` returns an empty `<indexers>` document.
+                 * @example true
+                 */
+                configured?: components["parameters"]["TorznabConfigured"];
+                /**
+                 * @description Optional tracker filter (comma-separated `TrackerSlug` values); same semantics as `Tracker[]`.
+                 *     Also accepted as `tracker` / `Tracker[n]`.
+                 */
+                Tracker?: components["parameters"]["TrackerFilter"];
+                /**
+                 * @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker).
+                 *     Case-insensitive; matches any comma-separated part of stored trackerName.
+                 */
+                "Tracker[]"?: components["parameters"]["TrackerArray"];
+                /**
+                 * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+                 *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+                 */
+                tracker?: components["parameters"]["TrackerAlias"];
             };
             header?: never;
             path: {
+                /** @description Prowlarr indexer id (use `1` for JacRed aggregate) */
                 indexer: string;
             };
             cookie?: never;
@@ -1318,6 +1980,40 @@ export interface operations {
                     "application/xml": string;
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            /** @description Torznab disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prowlarrNewznabHead: {
+        parameters: {
+            query?: {
+                /** @description API key (alternative — X-Api-Key header or Bearer) */
+                apikey?: components["parameters"]["ApiKeyQuery"];
+            };
+            header?: never;
+            path: {
+                indexer: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty XML OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             /** @description Torznab disabled */
             404: {
                 headers: {
@@ -1334,16 +2030,64 @@ export interface operations {
                 apikey?: components["parameters"]["ApiKeyQuery"];
                 /** @description URL-encoded search string (supports Prowlarr brace tokens) */
                 query?: string;
-                type?: "search" | "tvsearch" | "movie" | "music" | "book";
+                /** @description Free-text search alias for `query` / Torznab `q` */
+                q?: components["parameters"]["SearchQ"];
+                /** @description Search kind. `movie`/`moviesearch` map to `is_serial=1`; `tv`/`tvsearch` map to `is_serial=2`. */
+                type?: "search" | "tvsearch" | "movie" | "moviesearch" | "tv" | "music" | "book";
                 /**
                  * @description Comma-separated or repeated; `1` or `-2` (torrents) select JacRed; omit = all; `-1` = usenet (empty)
                  * @example 1
                  */
                 indexerIds?: string;
-                /** @description Repeat for each category (e.g. categories=2000&categories=5000) */
-                categories?: number;
-                limit?: number;
-                offset?: number;
+                /**
+                 * @description Torznab/Jackett category ids (repeat or comma-separated).
+                 *     Also accepted as `cat`, `Category`, `Category[]`, `Category[n]`.
+                 */
+                categories?: components["parameters"]["Categories"];
+                /** @description Comma-separated Torznab category ids */
+                cat?: components["parameters"]["TorznabCat"];
+                /** @description Single or comma-separated category ids (alias for `categories` / `cat`) */
+                Category?: components["parameters"]["Category"];
+                /** @description Jackett/Lampa category array (e.g. 2000 movies, 5000 TV, 5070 anime) */
+                "Category[]"?: components["parameters"]["CategoryBracket"];
+                /** @description Localized title (JacRed / Lampa card search) */
+                title?: components["parameters"]["TorznabTitle"];
+                /** @description Original title (JacRed / Lampa card search) */
+                title_original?: components["parameters"]["TorznabTitleOriginal"];
+                /** @description Release year filter / card-search override */
+                year?: components["parameters"]["Year"];
+                /** @description -1 unknown, 1 movie, 2 serial, 3 tvshow, 4 doc, 5 anime */
+                is_serial?: components["parameters"]["IsSerial"];
+                /** @description Season number (tv-search filter) */
+                season?: components["parameters"]["TorznabSeason"];
+                /** @description Episode number (tv-search filter) */
+                ep?: components["parameters"]["TorznabEp"];
+                /** @description Alias for `ep` */
+                episode?: components["parameters"]["TorznabEpisode"];
+                /**
+                 * @description When non-empty, enables JacRed card-metadata search mode (same trigger as title/title_original).
+                 *     Not used as a genre filter on results.
+                 */
+                genres?: components["parameters"]["Genres"];
+                /**
+                 * @description Optional tracker filter (comma-separated `TrackerSlug` values); same semantics as `Tracker[]`.
+                 *     Also accepted as `tracker` / `Tracker[n]`.
+                 */
+                Tracker?: components["parameters"]["TrackerFilter"];
+                /**
+                 * @description Jackett-style filter by internal tracker id (e.g. kinozal, rutracker).
+                 *     Case-insensitive; matches any comma-separated part of stored trackerName.
+                 */
+                "Tracker[]"?: components["parameters"]["TrackerArray"];
+                /**
+                 * @description Single-tracker or comma-separated alias for `Tracker[]` / `Tracker`
+                 *     (`TrackerSlug` values; case-insensitive; matches any comma-separated part of stored trackerName).
+                 */
+                tracker?: components["parameters"]["TrackerAlias"];
+                /** @description Max results after filters */
+                limit?: components["parameters"]["TorznabLimit"];
+                /** @description Result offset for pagination */
+                offset?: components["parameters"]["TorznabOffset"];
             };
             header?: {
                 "X-Api-Key"?: string;
@@ -1362,6 +2106,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProwlarrRelease"][];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             /** @description Torznab disabled */
             404: {
                 headers: {
@@ -1477,6 +2222,7 @@ export interface operations {
     syncFdb: {
         parameters: {
             query?: {
+                /** @description Substring filter on FileDB master keys (first 20 matches) */
                 key?: string;
             };
             header?: never;
@@ -1485,12 +2231,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description FDB sync payload */
+            /** @description Matching FDB keys (or `[]` when opensync is false) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": unknown[] | components["schemas"]["SyncFdbKeyItem"][];
+                };
             };
         };
     };
@@ -1513,7 +2261,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["SyncFdbTorrentsResponse"];
                 };
             };
         };
@@ -1564,20 +2312,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigGetResponse"];
                 };
             };
-            /** @description Invalid or missing devkey */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Forbidden (LAN or devkey required) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configSave: {
@@ -1602,20 +2338,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigSaveResponse"];
                 };
             };
-            /** @description Invalid devkey */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Forbidden (LAN or devkey required) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configSchema: {
@@ -1639,6 +2363,8 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configValidate: {
@@ -1663,6 +2389,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigValidationResponse"];
                 };
             };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configDiff: {
@@ -1687,6 +2415,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigDiffResponse"];
                 };
             };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configRender: {
@@ -1720,6 +2450,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigRenderResponse"];
                 };
             };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configParse: {
@@ -1753,6 +2485,8 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     configFormat: {
@@ -1777,6 +2511,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigFormatResponse"];
                 };
             };
+            401: components["responses"]["ConfigUnauthorized"];
+            403: components["responses"]["ConfigForbidden"];
         };
     };
     openApiYaml: {

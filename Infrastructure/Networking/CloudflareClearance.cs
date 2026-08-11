@@ -38,6 +38,7 @@ namespace JacRed.Infrastructure.Networking
         static bool _sessionAlive;
         static DateTime _lastUse = DateTime.MinValue;
         static Timer _idleTimer;
+        static int _consecutiveBrowserTimeouts;
 
         static FlareSolverrSettingsView Conf
         {
@@ -56,6 +57,8 @@ namespace JacRed.Infrastructure.Networking
             public readonly string Url;
             public readonly int MaxTimeoutMs;
             public readonly int SessionIdleMinutes;
+            public readonly int BrowserTimeoutRetries;
+            public readonly int RecycleAfterTimeouts;
             public readonly int GuardedHours;
             public readonly int RecheckMinutes;
 
@@ -64,6 +67,8 @@ namespace JacRed.Infrastructure.Networking
                 Url = c.url;
                 MaxTimeoutMs = c.maxTimeoutMs;
                 SessionIdleMinutes = c.sessionIdleMinutes;
+                BrowserTimeoutRetries = Math.Max(0, c.browserTimeoutRetries);
+                RecycleAfterTimeouts = Math.Max(1, c.recycleAfterTimeouts);
                 GuardedHours = c.guardedHours;
                 RecheckMinutes = c.recheckMinutes;
             }
@@ -89,17 +94,26 @@ namespace JacRed.Infrastructure.Networking
 
         /// <summary>
         /// Разметка задачи Cloudflare в теле (старые виды без <c>cf-mitigated</c>).
+        ///
+        /// Важно: голый <c>challenge-platform</c> нельзя считать проверкой —
+        /// на обычных страницах rutracker Cloudflare вшивает
+        /// <c>/cdn-cgi/challenge-platform/scripts/jsd/main.js</c>. Это не interstitial.
+        /// Ищем именно orchestrate/chl_page или заголовок «Just a moment…».
         /// </summary>
         public static bool IsChallengeBody(string body)
         {
             if (string.IsNullOrEmpty(body) || body.Length > 200_000)
                 return false;
 
-            return body.Contains("cf-browser-verification", StringComparison.OrdinalIgnoreCase)
+            if (body.Contains("cf-browser-verification", StringComparison.OrdinalIgnoreCase)
                 || body.Contains("cf_chl_opt", StringComparison.OrdinalIgnoreCase)
-                || body.Contains("challenge-platform", StringComparison.OrdinalIgnoreCase)
                 || body.Contains("Just a moment", StringComparison.OrdinalIgnoreCase)
-                || body.Contains("Один момент", StringComparison.OrdinalIgnoreCase);
+                || body.Contains("Один момент", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Реальная задача CF, не jsd/main.js на обычной выдаче.
+            return body.Contains("orchestrate/chl_page", StringComparison.OrdinalIgnoreCase)
+                || body.Contains("challenge-platform/h/", StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsGuarded(string host)
@@ -161,7 +175,8 @@ namespace JacRed.Infrastructure.Networking
 
         /// <summary>
         /// Забирает страницу через браузер. Возвращает готовый HTML либо null.
-        /// Свой таймаут: решение задачи занимает до полутора минут.
+        /// Browser timeout: сначала retry той же сессии, destroy только после
+        /// <c>recycleAfterTimeouts</c> подряд (или сразу при явной ошибке session).
         /// </summary>
         public static async Task<string> FetchAsync(string url, string cookie = null)
         {
@@ -179,25 +194,66 @@ namespace JacRed.Infrastructure.Networking
                 if (!_sessionAlive && !await CreateSessionAsync(conf))
                     return null;
 
-                var (outcome, html) = await RequestAsync(conf, url, cookie);
+                var (outcome, html, failMessage) = await RequestWithTimeoutRetriesAsync(conf, url, cookie);
 
-                if (outcome == FetchOutcome.BrowserFailed)
+                if (outcome == FetchOutcome.Ok)
                 {
-                    await DestroySessionAsync(conf);
-
-                    if (!await CreateSessionAsync(conf))
-                        return null;
-
-                    (outcome, html) = await RequestAsync(conf, url, cookie);
-
-                    if (outcome == FetchOutcome.Ok)
-                        JacRedLog.Warning(JacRedLogCategories.Host, $"{host}: получилось со второй попытки, сессия пересоздана");
+                    _consecutiveBrowserTimeouts = 0;
+                    TouchSession(conf);
+                    return html;
                 }
 
-                _lastUse = DateTime.UtcNow;
-                ArmIdleTimer(conf);
+                if (outcome == FetchOutcome.PageFailed)
+                {
+                    TouchSession(conf);
+                    return null;
+                }
 
-                return outcome == FetchOutcome.Ok ? html : null;
+                bool browserTimeout = IsBrowserTimeoutMessage(failMessage);
+                bool sessionBroken = IsSessionBrokenMessage(failMessage);
+
+                if (browserTimeout && !sessionBroken)
+                {
+                    _consecutiveBrowserTimeouts++;
+
+                    if (_consecutiveBrowserTimeouts < conf.RecycleAfterTimeouts)
+                    {
+                        JacRedLog.Warning(JacRedLogCategories.Host,
+                            $"{host}: FlareSolverr browser timeout ({_consecutiveBrowserTimeouts}/{conf.RecycleAfterTimeouts}) — сессию оставляем, caller ретраит");
+                        TouchSession(conf);
+                        return null;
+                    }
+
+                    JacRedLog.Warning(JacRedLogCategories.Host,
+                        $"{host}: session recycled after {_consecutiveBrowserTimeouts} browser timeouts");
+                }
+                else
+                {
+                    JacRedLog.Warning(JacRedLogCategories.Host,
+                        $"{host}: FlareSolverr session recycle — {failMessage}");
+                }
+
+                await DestroySessionAsync(conf);
+                _consecutiveBrowserTimeouts = 0;
+
+                if (!await CreateSessionAsync(conf))
+                    return null;
+
+                (outcome, html, failMessage) = await RequestWithTimeoutRetriesAsync(conf, url, cookie);
+
+                if (outcome == FetchOutcome.Ok)
+                {
+                    _consecutiveBrowserTimeouts = 0;
+                    JacRedLog.Warning(JacRedLogCategories.Host, $"{host}: session recycled, OK");
+                    TouchSession(conf);
+                    return html;
+                }
+
+                if (IsBrowserTimeoutMessage(failMessage))
+                    _consecutiveBrowserTimeouts = 1;
+
+                TouchSession(conf);
+                return null;
             }
             catch (Exception ex)
             {
@@ -210,6 +266,42 @@ namespace JacRed.Infrastructure.Networking
             }
         }
 
+        static void TouchSession(FlareSolverrSettingsView conf)
+        {
+            _lastUse = DateTime.UtcNow;
+            ArmIdleTimer(conf);
+        }
+
+        /// <summary>Same-session retries on browser timeout before escalating.</summary>
+        static async Task<(FetchOutcome outcome, string html, string failMessage)> RequestWithTimeoutRetriesAsync(
+            FlareSolverrSettingsView conf, string url, string cookie)
+        {
+            int attempts = 1 + conf.BrowserTimeoutRetries;
+            FetchOutcome outcome = FetchOutcome.BrowserFailed;
+            string html = null;
+            string failMessage = null;
+
+            for (int i = 0; i < attempts; i++)
+            {
+                if (i > 0)
+                    await Task.Delay(1500);
+
+                (outcome, html, failMessage) = await RequestAsync(conf, url, cookie);
+
+                if (outcome != FetchOutcome.BrowserFailed)
+                    return (outcome, html, failMessage);
+
+                if (!IsBrowserTimeoutMessage(failMessage) || IsSessionBrokenMessage(failMessage))
+                    return (outcome, html, failMessage);
+
+                if (i + 1 < attempts)
+                    JacRedLog.Warning(JacRedLogCategories.Host,
+                        $"FlareSolverr browser timeout — same-session retry {i + 1}/{conf.BrowserTimeoutRetries}");
+            }
+
+            return (outcome, html, failMessage);
+        }
+
         enum FetchOutcome
         {
             Ok,
@@ -217,7 +309,7 @@ namespace JacRed.Infrastructure.Networking
             BrowserFailed
         }
 
-        static async Task<(FetchOutcome outcome, string html)> RequestAsync(FlareSolverrSettingsView conf, string url, string cookie)
+        static async Task<(FetchOutcome outcome, string html, string failMessage)> RequestAsync(FlareSolverrSettingsView conf, string url, string cookie)
         {
             var payload = new Dictionary<string, object>
             {
@@ -231,20 +323,19 @@ namespace JacRed.Infrastructure.Networking
             if (jar.Count > 0)
                 payload["cookies"] = jar;
 
+            // Proxy только через PROXY_* у контейнера FlareSolverr — в body не шлём
+            // (при session FlareSolverr всё равно игнорирует request proxy).
+
             var root = await CallAsync(conf, payload, conf.MaxTimeoutMs + 30000);
 
             if (root == null)
-                return (FetchOutcome.BrowserFailed, null);
+                return (FetchOutcome.BrowserFailed, null, "empty response / unreachable");
 
             if (!string.Equals(root.Value<string>("status"), "ok", StringComparison.OrdinalIgnoreCase))
             {
                 string message = root.Value<string>("message") ?? "";
                 JacRedLog.Error(JacRedLogCategories.Host, $"FlareSolverr отказал: {message}");
-
-                if (message.IndexOf("session", StringComparison.OrdinalIgnoreCase) >= 0)
-                    _sessionAlive = false;
-
-                return (FetchOutcome.BrowserFailed, null);
+                return (FetchOutcome.BrowserFailed, null, message);
             }
 
             var solution = root.Value<JObject>("solution");
@@ -252,9 +343,33 @@ namespace JacRed.Infrastructure.Networking
             string html = solution?.Value<string>("response");
 
             if (status != 200 || string.IsNullOrWhiteSpace(html))
-                return (FetchOutcome.PageFailed, null);
+                return (FetchOutcome.PageFailed, null, $"http {status}");
 
-            return (FetchOutcome.Ok, html);
+            // FS иногда отдаёт status=ok со страницей interstitial — не считаем успехом.
+            if (IsChallengeBody(html))
+                return (FetchOutcome.PageFailed, null, "challenge html in solution");
+
+            return (FetchOutcome.Ok, html, null);
+        }
+
+        static bool IsBrowserTimeoutMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return false;
+
+            return message.IndexOf("Read timed out", StringComparison.OrdinalIgnoreCase) >= 0
+                   || message.IndexOf("HTTPConnectionPool", StringComparison.OrdinalIgnoreCase) >= 0
+                   || message.IndexOf("Timeout after", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        static bool IsSessionBrokenMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return false;
+
+            // "Session not found" / "Session timeout" и т.п. — не путать с request timeout.
+            return message.IndexOf("session", StringComparison.OrdinalIgnoreCase) >= 0
+                   && !IsBrowserTimeoutMessage(message);
         }
 
         static List<Dictionary<string, string>> ParseCookies(string cookie)
@@ -307,9 +422,6 @@ namespace JacRed.Infrastructure.Networking
 
         static async Task DestroySessionAsync(FlareSolverrSettingsView conf)
         {
-            if (!_sessionAlive)
-                return;
-
             await CallAsync(conf, new Dictionary<string, object>
             {
                 ["cmd"] = "sessions.destroy",
