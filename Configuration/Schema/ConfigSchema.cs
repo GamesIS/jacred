@@ -11,19 +11,19 @@ namespace JacRed.Configuration.Schema
         {
             "rutracker", "rutor", "kinozal", "nnmclub", "megapeer", "bitru", "toloka", "mazepa",
             "lostfilm", "baibako", "torrentby", "selezen", "animelayer", "anidub", "anistar", "anibelka", "aniliberty", "knaben",
-            "leproduction", "viruseproject", "anifilm", "korsars", "ultradox", "rudub"
+            "leproduction", "viruseproject", "anifilm", "korsars", "ultradox", "rudub", "subsplease"
         };
 
         public static readonly HashSet<string> TrackerBlockNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "Rutor", "Megapeer", "TorrentBy", "Kinozal", "NNMClub", "Bitru", "Toloka", "Mazepa",
             "Rutracker", "Selezen", "Lostfilm", "Animelayer", "Anidub", "Anistar", "Anibelka", "Aniliberty", "Knaben", "Baibako",
-            "Leproduction", "Viruseproject", "Anifilm", "Korsars", "Ultradox", "Rudub"
+            "Leproduction", "Viruseproject", "Anifilm", "Korsars", "Ultradox", "Rudub", "SubsPlease"
         };
 
         public static readonly HashSet<string> SensitiveFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "apikey", "devkey", "cookie", "u", "p", "username", "password"
+            "apikey", "devkey", "cookie", "u", "p", "username", "password", "token"
         };
 
         public static object Get()
@@ -112,6 +112,15 @@ namespace JacRed.Configuration.Schema
                         Field("search.stripTrailingYear", "bool", "Strip trailing year", "Fuzzy: запрос без года"),
                         Field("search.skipCatFilter", "bool", "Skip cat filter", "Не фильтровать cat/Category[] на сервере"),
                         Field("search.minSeedsPeers", "int", "Min seeds+peers", "Скрывать результаты, где сиды+пиры < N (0 — выкл)", min: 0)
+                    }),
+                    Group("alloha", "Alloha", "KP/IMDB/TMDB ID → title (API v2)", new[]
+                    {
+                        Field("alloha.enable", "bool", "Включить", "Резолв tt… / kp… / tmdb… через Alloha"),
+                        Field("alloha.baseUrl", "string", "Base URL", "https://apbugall.org"),
+                        Field("alloha.token", "password", "Bearer token", "Authorization: Bearer …", sensitive: true),
+                        Field("alloha.timeoutSeconds", "int", "Timeout (с)", null, min: 1),
+                        Field("alloha.cacheHours", "int", "Cache (ч)", "Memory cache ID → titles", min: 0),
+                        Field("alloha.filterByYear", "bool", "Filter by year", "Если клиент не передал year — ±1 от Alloha")
                     }),
                     Group("torznab", "Torznab", "Torznab XML (Sonarr/Radarr/Prowlarr)", new[]
                     {
